@@ -6,3 +6,12 @@ __pycache__/
 *.db
 *.log
 .DS_Store
+uploads/
+backend/reset_admin_pw.py
+fix_types.py
+generate_ui.py
+p1.py
+p2.py
+p3.py
+p_onb.py
+p_rem.py

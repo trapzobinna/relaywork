@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { adminApi, authApi } from '../api/endpoints';
 import type { ProProfile, User, Job, Payment } from '../types';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { Shield, Check, X, FileText, Activity, Users, UserCheck, Clock, DollarSign, Briefcase, CreditCard, Ban, CheckCircle, KeyRound, Lock } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -22,6 +23,7 @@ export const AdminDashboard: React.FC = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   
   const { showToast } = useToast();
+  const { user: currentUser } = useAuth();
 
 
   const loadAdminData = async () => {
@@ -72,6 +74,28 @@ export const AdminDashboard: React.FC = () => {
       loadAdminData();
     } catch (err: any) {
       showToast('Action failed: ' + (err.response?.data?.detail || 'Unknown error'), 'error');
+    }
+  };
+
+  const handlePromoteToAdmin = async (userId: number, userName: string) => {
+    if (!window.confirm(`Are you sure you want to promote "${userName}" to Admin? This gives them full access to the admin panel.`)) return;
+    try {
+      await adminApi.promoteToAdmin(userId);
+      showToast(`${userName} has been promoted to Admin successfully.`, 'success');
+      loadAdminData();
+    } catch (err: any) {
+      showToast('Promotion failed: ' + (err.response?.data?.detail || 'Unknown error'), 'error');
+    }
+  };
+
+  const handleRevokeAdmin = async (userId: number, userName: string) => {
+    if (!window.confirm(`Are you sure you want to REVOKE admin privileges from "${userName}"? They will become a regular Client.`)) return;
+    try {
+      await adminApi.revokeAdmin(userId);
+      showToast(`Admin privileges revoked from ${userName}.`, 'success');
+      loadAdminData();
+    } catch (err: any) {
+      showToast('Revoke failed: ' + (err.response?.data?.detail || 'Unknown error'), 'error');
     }
   };
 
@@ -382,18 +406,40 @@ export const AdminDashboard: React.FC = () => {
                     </td>
                     <td className="p-3 text-gray-400">{new Date(u.created_at || Date.now()).toLocaleDateString()}</td>
                     <td className="p-3 text-right">
-                      {u.role !== 'admin' && (
-                        <button
-                          onClick={() => handleToggleUser(u.id, u.is_active)}
-                          className={`text-[11px] font-bold px-3 py-1.5 rounded-lg transition ${
-                            u.is_active
-                              ? 'text-red-600 bg-red-50 hover:bg-red-100 border border-red-200'
-                              : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
-                          }`}
-                        >
-                          {u.is_active ? 'Suspend' : 'Activate'}
-                        </button>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Revoke Admin — only bootstrap admin sees this, only on other admin rows */}
+                        {u.role === 'admin' && u.id !== currentUser?.id && stats?.bootstrap_admin_id === currentUser?.id && (
+                          <button
+                            onClick={() => handleRevokeAdmin(u.id, u.full_name)}
+                            className="text-[11px] font-bold px-3 py-1.5 rounded-lg transition text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200"
+                            title="Revoke Admin Privileges"
+                          >
+                            Revoke Admin
+                          </button>
+                        )}
+                        {/* Make Admin + Suspend/Activate — only for non-admin rows */}
+                        {u.role !== 'admin' && (
+                          <>
+                            <button
+                              onClick={() => handlePromoteToAdmin(u.id, u.full_name)}
+                              className="text-[11px] font-bold px-3 py-1.5 rounded-lg transition text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200"
+                              title="Promote to Admin"
+                            >
+                              Make Admin
+                            </button>
+                            <button
+                              onClick={() => handleToggleUser(u.id, u.is_active)}
+                              className={`text-[11px] font-bold px-3 py-1.5 rounded-lg transition ${
+                                u.is_active
+                                  ? 'text-red-600 bg-red-50 hover:bg-red-100 border border-red-200'
+                                  : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
+                              }`}
+                            >
+                              {u.is_active ? 'Suspend' : 'Activate'}
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

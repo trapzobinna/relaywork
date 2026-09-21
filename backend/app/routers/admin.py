@@ -151,6 +151,72 @@ def toggle_user_status(
     db.refresh(user)
     return user
 
+@router.post('/users/{id}/promote-admin', response_model=UserOut)
+def promote_to_admin(
+    id: int,
+    current_admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    if user.role == UserRole.ADMIN:
+        raise HTTPException(status_code=400, detail='User is already an admin')
+    if user.id == current_admin.id:
+        raise HTTPException(status_code=400, detail='You are already an admin')
+
+    previous_role = user.role.value
+    user.role = UserRole.ADMIN
+    user.is_active = True
+    user.is_verified = True
+
+    log = AdminAction(
+        admin_id=current_admin.id,
+        action_type='USER_PROMOTED_TO_ADMIN',
+        target_user_id=user.id,
+        notes=f'User promoted from {previous_role} to ADMIN'
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(user)
+    return user
+
+@router.post('/users/{id}/revoke-admin', response_model=UserOut)
+def revoke_admin(
+    id: int,
+    current_admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    # Only the bootstrap admin (who created themselves) may revoke admin rights
+    bootstrap_log = db.query(AdminAction).filter(
+        AdminAction.action_type == 'BOOTSTRAP_ADMIN_CREATED'
+    ).first()
+    if not bootstrap_log or bootstrap_log.admin_id != current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Only the original bootstrap admin can revoke admin privileges'
+        )
+
+    user = db.query(User).filter(User.id == id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=400, detail='User is not an admin')
+    if user.id == current_admin.id:
+        raise HTTPException(status_code=400, detail='You cannot revoke your own admin privileges')
+
+    user.role = UserRole.CLIENT
+    log = AdminAction(
+        admin_id=current_admin.id,
+        action_type='ADMIN_PRIVILEGES_REVOKED',
+        target_user_id=user.id,
+        notes=f'Admin privileges revoked — role changed to CLIENT'
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(user)
+    return user
+
 @router.get('/transactions', response_model=List[PaymentOut])
 def list_transactions(
     current_admin: User = Depends(require_admin),
@@ -169,7 +235,13 @@ def get_admin_stats(
     total_jobs = db.query(Job).count()
     completed_jobs = db.query(Job).filter(Job.status == JobStatus.COMPLETED).count()
     total_payments = db.query(Payment).filter(Payment.status == PaymentStatus.SUCCESS).count()
-    
+
+    # Identify the bootstrap admin — the one who bootstrapped themselves
+    bootstrap_log = db.query(AdminAction).filter(
+        AdminAction.action_type == 'BOOTSTRAP_ADMIN_CREATED'
+    ).first()
+    bootstrap_admin_id = bootstrap_log.admin_id if bootstrap_log else None
+
     return {
         'total_users': total_users,
         'verified_pros': verified_pros,
@@ -177,7 +249,8 @@ def get_admin_stats(
         'total_jobs': total_jobs,
         'completed_jobs': completed_jobs,
         'total_payments': total_payments,
-        'commission_percent': settings.PLATFORM_COMMISSION_PERCENT
+        'commission_percent': settings.PLATFORM_COMMISSION_PERCENT,
+        'bootstrap_admin_id': bootstrap_admin_id
     }
 
 @router.get('/jobs')

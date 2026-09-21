@@ -154,6 +154,14 @@ export const adminApi = {
     const res = await api.post(`/admin/users/${userId}/toggle-status`);
     return res.data;
   },
+  promoteToAdmin: async (userId: number): Promise<User> => {
+    const res = await api.post(`/admin/users/${userId}/promote-admin`);
+    return res.data;
+  },
+  revokeAdmin: async (userId: number): Promise<User> => {
+    const res = await api.post(`/admin/users/${userId}/revoke-admin`);
+    return res.data;
+  },
   getTransactions: async (): Promise<Payment[]> => {
     const res = await api.get('/admin/transactions');
     return res.data;
