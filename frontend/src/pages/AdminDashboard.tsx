@@ -297,7 +297,7 @@ export const AdminDashboard: React.FC = () => {
                       </p>
                       {pro.id_document_url && (
                         <a
-                          href={`http://localhost:8000/api/admin/docs/${pro.id}`}
+                          href={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/admin/docs/${pro.id}`}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center text-xs text-blue-600 hover:underline pt-1 font-semibold"

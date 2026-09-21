@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { jobsApi } from '../api/endpoints';
 import type { Message, User } from '../types';
 import { Send } from 'lucide-react';
@@ -33,7 +33,9 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ jobId, currentUser }) => {
     fetchHistory();
 
     const token = localStorage.getItem('relaywork_token');
-    const wsUrl = `ws://localhost:8000/api/chat/ws/${jobId}?token=${token}`;
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+    const wsBase = apiBase.replace(/^http/, 'ws');
+    const wsUrl = `${wsBase}/chat/ws/${jobId}?token=${token}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
