@@ -8,6 +8,7 @@ __pycache__/
 .DS_Store
 uploads/
 backend/reset_admin_pw.py
+backend/test_startup.py
 fix_types.py
 generate_ui.py
 p1.py

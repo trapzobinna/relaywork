@@ -10,8 +10,16 @@ from app.database import engine, Base
 import app.models
 
 from app.routers import auth, categories, pros, jobs, chat, payments, reviews, admin
+from seed import seed as run_seed
 
 Base.metadata.create_all(bind=engine)
+
+# Auto-seed on startup — safe to run every time (all inserts are idempotent)
+try:
+    run_seed()
+except Exception as e:
+    print(f'[Seed] Warning: seed step failed — {e}')
+
 
 app = FastAPI(
     title='RelayWork API',
