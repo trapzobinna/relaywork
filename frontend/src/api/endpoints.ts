@@ -22,17 +22,24 @@ export const authApi = {
 
 export const categoriesApi = {
   getAll: async (): Promise<SkillCategory[]> => {
-    const res = await api.get('/categories');
-    return res.data;
+    try {
+      const res = await api.get('/categories');
+      return res.data;
+    } catch {
+      const res = await api.get('/skill-categories');
+      return res.data;
+    }
   },
 };
 
 export const prosApi = {
   search: async (params: {
+    q?: string;
     category_id?: number;
     lat?: number;
     lng?: number;
     radius_km?: number;
+    sort?: string;
   }): Promise<ProProfile[]> => {
     const res = await api.get('/pros/search', { params });
     return res.data;
@@ -55,6 +62,10 @@ export const prosApi = {
     const res = await api.post('/pros/documents', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return res.data;
+  },
+  updateAvailability: async (is_available: boolean): Promise<ProProfile> => {
+    const res = await api.patch('/pros/me/availability', { is_available });
     return res.data;
   },
 };
@@ -173,6 +184,25 @@ export const adminApi = {
   getAuditLogs: async () => {
     const res = await api.get('/admin/audit-logs');
     return res.data;
+  },
+};
+
+export const portfolioApi = {
+  getByPro: async (proId: number) => {
+    const res = await api.get(`/pros/${proId}/portfolio`);
+    return res.data;
+  },
+  upload: async (proId: number, file: File, caption?: string) => {
+    const form = new FormData();
+    form.append('photo', file);
+    if (caption) form.append('caption', caption);
+    const res = await api.post(`/pros/${proId}/portfolio`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+  delete: async (proId: number, photoId: number) => {
+    await api.delete(`/pros/${proId}/portfolio/${photoId}`);
   },
 };
 

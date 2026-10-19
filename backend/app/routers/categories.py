@@ -6,13 +6,15 @@ from app.models import SkillCategory, User
 from app.schemas import SkillCategoryOut, SkillCategoryCreate
 from app.core.deps import require_admin
 
-router = APIRouter(prefix='/api/skill-categories', tags=['Skill Categories'])
+router = APIRouter(tags=['Skill Categories'])
 
-@router.get('', response_model=List[SkillCategoryOut])
+@router.get('/api/skill-categories', response_model=List[SkillCategoryOut])
+@router.get('/api/categories', response_model=List[SkillCategoryOut])
 def get_categories(db: Session = Depends(get_db)):
     return db.query(SkillCategory).order_by(SkillCategory.name.asc()).all()
 
-@router.post('', response_model=SkillCategoryOut, status_code=status.HTTP_201_CREATED)
+@router.post('/api/skill-categories', response_model=SkillCategoryOut, status_code=status.HTTP_201_CREATED)
+@router.post('/api/categories', response_model=SkillCategoryOut, status_code=status.HTTP_201_CREATED)
 def create_category(data: SkillCategoryCreate, db: Session = Depends(get_db), current_admin: User = Depends(require_admin)):
     existing = db.query(SkillCategory).filter(
         (SkillCategory.name == data.name) | (SkillCategory.slug == data.slug)

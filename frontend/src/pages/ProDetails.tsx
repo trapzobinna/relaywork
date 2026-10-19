@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { prosApi, jobsApi } from '../api/endpoints';
+import { prosApi, jobsApi, portfolioApi } from '../api/endpoints';
 import type { ProProfile } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Star, ShieldCheck, ArrowLeft, Send, CheckCircle, MapPin, Zap, MessageSquare } from 'lucide-react';
+import { Star, ShieldCheck, ArrowLeft, Send, CheckCircle, MapPin, Zap, MessageSquare, Clock } from 'lucide-react';
+import { TradeIcon } from '../components/TradeIcon';
 
 import { AddressAutocomplete } from '../components/AddressAutocomplete';
 
 export const ProDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [pro, setPro] = useState<ProProfile | null>(null);
+  const [portfolioPhotos, setPortfolioPhotos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingLoading, setBookingLoading] = useState(false);
   
@@ -26,10 +28,13 @@ export const ProDetails: React.FC = () => {
   useEffect(() => {
     if (id) {
       setLoading(true);
-      prosApi
-        .getById(Number(id))
-        .then((data) => {
+      Promise.all([
+        prosApi.getById(Number(id)),
+        portfolioApi.getByPro(Number(id)).catch(() => [])
+      ])
+        .then(([data, photos]) => {
           setPro(data);
+          setPortfolioPhotos(photos);
           if (data.address_text) {
             setLocationAddress(data.address_text);
           }
@@ -140,17 +145,24 @@ export const ProDetails: React.FC = () => {
       <div className="bg-white p-8 rounded-3xl border border-gray-200/80 shadow-sm space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-3xl font-black text-gray-900 tracking-tight">
                 {displayName}
               </h1>
-              {pro.verification_status === 'approved' && (
+              {pro.verification_status === 'approved' ? (
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <ShieldCheck className="w-4 h-4 mr-1 text-emerald-600" /> Vetted Badge
                 </span>
+              ) : (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                  <Clock className="w-4 h-4 mr-1 text-slate-500" /> Under Review
+                </span>
               )}
             </div>
-            <p className="text-lg text-blue-600 font-bold">{displayCategory}</p>
+            <div className="flex items-center gap-1.5 text-base text-blue-600 font-bold pt-0.5">
+              <TradeIcon nameOrSlug={displayCategory} className="w-4 h-4 text-blue-600" />
+              <span>{displayCategory}</span>
+            </div>
             <div className="flex items-center text-xs text-gray-500 space-x-1 pt-1">
               <MapPin className="w-3.5 h-3.5 text-gray-400" />
               <span>{pro.address_text || 'Ikeja & Greater Lagos Metro'} • Within {pro.service_radius_km || 25}km radius</span>
@@ -194,6 +206,29 @@ export const ProDetails: React.FC = () => {
           <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">
             {pro.bio || 'Verified tradesperson equipped with modern trade tools and certified for domestic and commercial assignments.'}
           </p>
+        </div>
+
+        {/* Portfolio Gallery */}
+        <div className="space-y-4 pt-4 border-t border-gray-100">
+          <h3 className="font-bold text-gray-900 text-lg">Past Work</h3>
+          {portfolioPhotos.length > 0 ? (
+            <div className="flex overflow-x-auto hide-scrollbar space-x-4 pb-2 snap-x">
+              {portfolioPhotos.map((photo: any) => (
+                <div key={photo.id} className="relative group rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 aspect-[4/5] min-w-[200px] sm:min-w-[240px] snap-center">
+                  <img src={photo.image_url} alt={photo.caption || 'Past work'} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                  {photo.caption && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-8 text-white text-xs font-bold">
+                      {photo.caption}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-100 rounded-2xl p-8 text-center text-gray-400 text-sm font-medium">
+              No portfolio photos uploaded yet.
+            </div>
+          )}
         </div>
       </div>
 

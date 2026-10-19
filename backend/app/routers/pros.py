@@ -3,12 +3,13 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
 from app.database import get_db
 from app.core.config import settings
 from app.core.deps import get_current_user, require_pro, require_admin
 from app.models import User, ProProfile, SkillCategory, UserRole, VerificationStatus
-from app.schemas import ProProfileCreate, ProProfileUpdate, ProProfileOut
+from app.schemas import ProProfileCreate, ProProfileUpdate, ProProfileOut, ProAvailabilityUpdate
 from app.services.geolocation import haversine_distance
 
 router = APIRouter(prefix='/api/pros', tags=['Pros'])
@@ -19,6 +20,10 @@ def mask_account(num: Optional[str]) -> Optional[str]:
     return f'•••• {num[-4:]}'
 
 def format_pro_out(profile: ProProfile, distance_km: Optional[float] = None) -> ProProfileOut:
+    base = settings.FRONTEND_ORIGIN.replace('localhost:5173', 'localhost:8000') if 'localhost:5173' in settings.FRONTEND_ORIGIN else ''
+    from app.routers.portfolio import _photo_to_out
+    photos_out = [_photo_to_out(p, base) for p in profile.portfolio_photos] if getattr(profile, 'portfolio_photos', None) else []
+
     return ProProfileOut(
         id=profile.id,
         user_id=profile.user.id,
@@ -38,26 +43,41 @@ def format_pro_out(profile: ProProfile, distance_km: Optional[float] = None) -> 
         has_cert_document=bool(profile.certification_document_path),
         masked_account_number=mask_account(profile.account_number),
         bank_name=profile.bank_name,
+        is_available=profile.is_available,
         avg_rating=profile.avg_rating,
         total_reviews=profile.total_reviews,
         total_jobs_completed=profile.total_jobs_completed,
         distance_km=distance_km,
-        created_at=profile.created_at
+        created_at=profile.created_at,
+        portfolio_photos=photos_out
     )
 
 @router.get('/search', response_model=List[ProProfileOut])
 def search_pros(
+    q: Optional[str] = Query(None, description="Search by pro name, trade, or keyword"),
     category_id: Optional[int] = None,
     lat: Optional[float] = Query(None, ge=-90.0, le=90.0),
     lng: Optional[float] = Query(None, ge=-180.0, le=180.0),
     radius_km: Optional[float] = Query(50.0, ge=1.0, le=500.0),
-    sort: Optional[str] = 'distance',
+    sort: Optional[str] = 'recent',
     db: Session = Depends(get_db)
 ):
-    query = db.query(ProProfile).join(User).filter(
+    query = db.query(ProProfile).join(User).outerjoin(SkillCategory, ProProfile.skill_category_id == SkillCategory.id).filter(
         User.is_active == True,
-        ProProfile.verification_status == VerificationStatus.APPROVED
+        ProProfile.verification_status.in_([VerificationStatus.APPROVED, VerificationStatus.PENDING]),
+        ProProfile.is_available == True
     )
+
+    if q and q.strip():
+        search_term = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                User.full_name.ilike(search_term),
+                ProProfile.bio.ilike(search_term),
+                ProProfile.address_text.ilike(search_term),
+                SkillCategory.name.ilike(search_term)
+            )
+        )
 
     if category_id:
         query = query.filter(ProProfile.skill_category_id == category_id)
@@ -69,18 +89,20 @@ def search_pros(
         dist = None
         if lat is not None and lng is not None and p.latitude is not None and p.longitude is not None:
             dist = haversine_distance(lat, lng, p.latitude, p.longitude)
-            # Must be within both search radius and the pro's own service radius
-            if dist > radius_km or dist > p.service_radius_km:
+            # Only filter by radius if client is not performing a direct name/text search
+            if not (q and q.strip()) and radius_km is not None and dist > radius_km:
                 continue
         
         results.append(format_pro_out(p, dist))
 
-    if sort == 'rating':
+    if sort == 'recent':
+        results.sort(key=lambda x: x.created_at, reverse=True)
+    elif sort == 'rating':
         results.sort(key=lambda x: (x.avg_rating, x.total_jobs_completed), reverse=True)
-    elif lat is not None and lng is not None:
-        results.sort(key=lambda x: (x.distance_km is None, x.distance_km, -x.avg_rating))
+    elif sort == 'distance' and lat is not None and lng is not None:
+        results.sort(key=lambda x: (x.distance_km is None, x.distance_km if x.distance_km is not None else 99999, -x.avg_rating))
     else:
-        results.sort(key=lambda x: (-x.avg_rating, -x.total_jobs_completed))
+        results.sort(key=lambda x: x.created_at, reverse=True)
 
     return results
 
@@ -140,6 +162,21 @@ def create_or_update_profile(
         if data.account_number: profile.account_number = data.account_number
         if data.account_name: profile.account_name = data.account_name
 
+    db.commit()
+    db.refresh(profile)
+    return format_pro_out(profile)
+
+@router.patch('/me/availability', response_model=ProProfileOut)
+def update_availability(
+    data: ProAvailabilityUpdate,
+    current_user: User = Depends(require_pro),
+    db: Session = Depends(get_db)
+):
+    profile = db.query(ProProfile).filter(ProProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail='Pro profile not found')
+    
+    profile.is_available = data.is_available
     db.commit()
     db.refresh(profile)
     return format_pro_out(profile)

@@ -9,10 +9,38 @@ from app.core.rate_limiter import limiter
 from app.database import engine, Base
 import app.models
 
-from app.routers import auth, categories, pros, jobs, chat, payments, reviews, admin
+from app.routers import auth, categories, pros, jobs, chat, payments, reviews, admin, portfolio
 from seed import seed as run_seed
 
 Base.metadata.create_all(bind=engine)
+
+def run_migrations():
+    try:
+        with engine.connect() as conn:
+            if engine.dialect.name == 'sqlite':
+                raw_conn = conn.connection
+                cursor = raw_conn.cursor()
+                def add_col(table, col, col_def):
+                    cursor.execute(f"PRAGMA table_info({table})")
+                    cols = [r[1] for r in cursor.fetchall()]
+                    if cols and col not in cols:
+                        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}")
+                        raw_conn.commit()
+                add_col('pro_profiles', 'is_available', 'BOOLEAN DEFAULT 1 NOT NULL')
+                add_col('jobs', 'is_en_route', 'BOOLEAN DEFAULT 0 NOT NULL')
+                add_col('jobs', 'has_arrived', 'BOOLEAN DEFAULT 0 NOT NULL')
+                add_col('jobs', 'last_location_updated_at', 'DATETIME')
+            else:
+                from sqlalchemy import text
+                conn.execute(text("ALTER TABLE pro_profiles ADD COLUMN IF NOT EXISTS is_available BOOLEAN DEFAULT TRUE NOT NULL;"))
+                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS is_en_route BOOLEAN DEFAULT FALSE NOT NULL;"))
+                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS has_arrived BOOLEAN DEFAULT FALSE NOT NULL;"))
+                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS last_location_updated_at TIMESTAMP;"))
+                conn.commit()
+    except Exception as e:
+        print(f"[Migration] Warning: migration step encountered: {e}")
+
+run_migrations()
 
 # Auto-seed on startup — safe to run every time (all inserts are idempotent)
 try:
@@ -56,6 +84,7 @@ app.include_router(chat.router)
 app.include_router(payments.router)
 app.include_router(reviews.router)
 app.include_router(admin.router)
+app.include_router(portfolio.router)
 
 @app.get('/api/health', tags=['Health'])
 def health_check():

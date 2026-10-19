@@ -13,6 +13,7 @@ import { MyJobs } from './pages/MyJobs';
 import { JobDetails } from './pages/JobDetails';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { BootstrapAdmin } from './pages/BootstrapAdmin';
+import { ProDashboard } from './pages/ProDashboard';
 
 const ProtectedRoute: React.FC<{
   children: React.ReactNode;
@@ -68,6 +69,15 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <JobDetails />
+                    </ProtectedRoute>
+                  }
+                />
+                
+                <Route
+                  path="/pro-dashboard"
+                  element={
+                    <ProtectedRoute allowedRoles={['pro']}>
+                      <ProDashboard />
                     </ProtectedRoute>
                   }
                 />

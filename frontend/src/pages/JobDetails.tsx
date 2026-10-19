@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ChatBox } from '../components/ChatBox';
 import { LiveRouteTracker } from '../components/LiveRouteTracker';
-import { CheckCircle2, DollarSign, Star, ShieldCheck, Clock, Check, X, Play, Navigation, AlertCircle } from 'lucide-react';
+import { CheckCircle2, DollarSign, Star, ShieldCheck, Clock, Check, X, Play, Navigation, AlertCircle, MapPin } from 'lucide-react';
 
 export const JobDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -414,7 +414,10 @@ export const JobDetails: React.FC = () => {
             <h3 className="font-bold text-gray-900 text-base">Job Description & Site Address</h3>
             <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{job.description}</p>
             {job.location_address && (
-              <p className="text-xs text-gray-400 pt-2 border-t">📍 {job.location_address}</p>
+              <p className="text-xs text-gray-500 pt-2 border-t flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                <span>{job.location_address}</span>
+              </p>
             )}
           </div>
         </div>

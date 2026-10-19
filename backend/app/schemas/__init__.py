@@ -81,6 +81,9 @@ class ProProfileUpdate(BaseModel):
     longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
     address_text: Optional[str] = None
 
+class ProAvailabilityUpdate(BaseModel):
+    is_available: bool
+
 class ProProfileOut(BaseModel):
     id: int
     user_id: int
@@ -101,11 +104,13 @@ class ProProfileOut(BaseModel):
     has_cert_document: bool = False
     masked_account_number: Optional[str] = None
     bank_name: Optional[str] = None
+    is_available: bool = True
     avg_rating: float
     total_reviews: int
     total_jobs_completed: int
     distance_km: Optional[float] = None
     created_at: datetime
+    portfolio_photos: Optional[List['PortfolioPhotoOut']] = None
 
     class Config:
         from_attributes = True
@@ -252,6 +257,16 @@ class AdminActionOut(BaseModel):
     target_user_id: Optional[int] = None
     notes: Optional[str] = None
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class PortfolioPhotoOut(BaseModel):
+    id: int
+    pro_profile_id: int
+    image_url: str
+    caption: Optional[str] = None
+    uploaded_at: datetime
 
     class Config:
         from_attributes = True

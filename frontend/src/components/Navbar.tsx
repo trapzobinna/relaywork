@@ -31,13 +31,15 @@ export const Navbar: React.FC = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-4">
-            <Link
-              to="/pros"
-              className="flex items-center space-x-1 text-gray-600 hover:text-blue-600 text-sm font-medium px-3 py-2 rounded-md hover:bg-gray-50 transition"
-            >
-              <Search className="w-4 h-4" />
-              <span>Find Pros</span>
-            </Link>
+            {user?.role !== 'pro' && (
+              <Link
+                to="/pros"
+                className="flex items-center space-x-1 text-gray-600 hover:text-blue-600 text-sm font-medium px-3 py-2 rounded-md hover:bg-gray-50 transition"
+              >
+                <Search className="w-4 h-4" />
+                <span>Find Pros</span>
+              </Link>
+            )}
 
             {user ? (
               <>
@@ -51,10 +53,10 @@ export const Navbar: React.FC = () => {
 
                 {user.role === 'pro' && (
                   <Link
-                    to="/pro/onboarding"
+                    to="/pro-dashboard"
                     className="text-gray-600 hover:text-blue-600 text-sm font-medium px-3 py-2 rounded-md hover:bg-gray-50 transition"
                   >
-                    Pro Profile
+                    My Dashboard
                   </Link>
                 )}
 
@@ -118,14 +120,16 @@ export const Navbar: React.FC = () => {
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-gray-100 bg-white px-4 pt-3 pb-6 space-y-3 shadow-lg">
-          <Link
-            to="/pros"
-            onClick={() => setMobileMenuOpen(false)}
-            className="flex items-center space-x-2 px-3 py-2.5 rounded-lg text-base font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600"
-          >
-            <Search className="w-5 h-5 text-gray-500" />
-            <span>Find Pros</span>
-          </Link>
+          {user?.role !== 'pro' && (
+            <Link
+              to="/pros"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center space-x-2 px-3 py-2.5 rounded-lg text-base font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+            >
+              <Search className="w-5 h-5 text-gray-500" />
+              <span>Find Pros</span>
+            </Link>
+          )}
 
           {user ? (
             <>
@@ -140,11 +144,11 @@ export const Navbar: React.FC = () => {
 
               {user.role === 'pro' && (
                 <Link
-                  to="/pro/onboarding"
+                  to="/pro-dashboard"
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex items-center space-x-2 px-3 py-2.5 rounded-lg text-base font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600"
                 >
-                  <span>Pro Profile & KYC</span>
+                  <span>My Dashboard</span>
                 </Link>
               )}
 

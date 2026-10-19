@@ -3,15 +3,18 @@ import { Link, useNavigate } from 'react-router-dom';
 import { categoriesApi } from '../api/endpoints';
 import type { SkillCategory } from '../types';
 import { AddressAutocomplete } from '../components/AddressAutocomplete';
-import { ShieldCheck, Clock, CreditCard, Search, ArrowRight, Star, Sparkles, CheckCircle2 } from 'lucide-react';
+import { TradeIcon } from '../components/TradeIcon';
+import { ShieldCheck, Clock, CreditCard, Search, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 const DEFAULT_CATEGORIES: SkillCategory[] = [
-  { id: 1, name: 'Electrician', slug: 'electrician', icon: '⚡', description: 'Faults, wiring, fixtures & generator servicing' },
-  { id: 2, name: 'Plumber', slug: 'plumber', icon: '🔧', description: 'Leaking pipes, borehole pumps & bathroom fixtures' },
-  { id: 3, name: 'Carpenter', slug: 'carpenter', icon: '🪚', description: 'Furniture making, doors, roofing & cabinet repair' },
-  { id: 4, name: 'AC Repair', slug: 'ac-repair', icon: '❄️', description: 'AC servicing, gas refilling & installations' },
-  { id: 5, name: 'Painter', slug: 'painter', icon: '🎨', description: 'Interior/exterior wall painting & decorative screeding' },
-  { id: 6, name: 'Auto Mechanic', slug: 'auto-mechanic', icon: '🚗', description: 'Car breakdown, engine diagnostic & brake overhaul' },
+  { id: 1, name: 'Electrician', slug: 'electrician', icon: 'Zap', description: 'Faults, wiring, fixtures & generator servicing' },
+  { id: 2, name: 'Plumber', slug: 'plumber', icon: 'Wrench', description: 'Leaking pipes, borehole pumps & bathroom fixtures' },
+  { id: 3, name: 'Carpenter & Woodwork', slug: 'carpenter', icon: 'Hammer', description: 'Furniture making, doors, roofing & cabinet repair' },
+  { id: 4, name: 'AC Repair & HVAC', slug: 'ac-repair', icon: 'Wind', description: 'AC servicing, gas refilling & installations' },
+  { id: 5, name: 'Painter & Decorator', slug: 'painter', icon: 'Paintbrush', description: 'Interior/exterior wall painting & decorative screeding' },
+  { id: 6, name: 'Appliance Repair', slug: 'appliance-repair', icon: 'Tv', description: 'Washing machines, refrigerators & electronics' },
+  { id: 7, name: 'Welder & Fabricator', slug: 'welder', icon: 'Flame', description: 'Burglar proofs, iron gates & metal fabrication' },
+  { id: 8, name: 'Mason & Bricklayer', slug: 'mason', icon: 'Layers', description: 'Tiling, plastering, interlocking & masonry' },
 ];
 
 export const Home: React.FC = () => {
@@ -41,7 +44,6 @@ export const Home: React.FC = () => {
     navigate(`/pros?${params.toString()}`);
   };
 
-
   return (
     <div className="space-y-20 pb-20">
       {/* Hero Section */}
@@ -52,8 +54,8 @@ export const Home: React.FC = () => {
 
         <div className="max-w-4xl mx-auto text-center space-y-8 relative z-10">
           <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full text-xs font-bold bg-blue-800/60 text-blue-200 border border-blue-400/30 backdrop-blur-md shadow-inner">
-            <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>Nigeria's #1 On-Demand Skilled-Labor Platform</span>
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Vetted Skilled-Labor & Artisan Marketplace</span>
           </div>
 
           <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[1.1]">
@@ -79,7 +81,7 @@ export const Home: React.FC = () => {
                 <option value="">All Trade Categories</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.icon ? `${c.icon} ` : ''}{c.name}
+                    {c.name}
                   </option>
                 ))}
               </select>
@@ -163,21 +165,21 @@ export const Home: React.FC = () => {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
           {categories.map((c) => (
             <Link
               key={c.id}
               to={`/pros?category_id=${c.id}`}
-              className="bg-white p-6 rounded-3xl border border-gray-200/80 hover:border-blue-500 hover:shadow-xl transition flex flex-col items-center space-y-3 group text-center"
+              className="bg-white p-5 rounded-2xl border border-gray-200/90 hover:border-blue-500 hover:shadow-lg transition-all duration-200 flex flex-col items-center space-y-3 group text-center"
             >
-              <div className="w-14 h-14 rounded-2xl bg-gray-50 group-hover:bg-blue-50 text-gray-700 group-hover:text-blue-600 flex items-center justify-center text-3xl transition transform group-hover:scale-110">
-                {c.icon || '🔧'}
+              <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 group-hover:bg-blue-50 group-hover:border-blue-200 text-slate-700 group-hover:text-blue-600 flex items-center justify-center transition-all duration-200 group-hover:scale-105">
+                <TradeIcon nameOrSlug={c.slug || c.name || c.icon} className="w-5 h-5" />
               </div>
               <div>
-                <span className="font-extrabold text-gray-900 text-sm group-hover:text-blue-600 transition block">
+                <span className="font-bold text-gray-900 text-xs group-hover:text-blue-600 transition block">
                   {c.name}
                 </span>
-                <span className="text-[11px] text-gray-400 mt-0.5 block">View specialists</span>
+                <span className="text-[10px] text-gray-400 mt-0.5 block font-medium">Browse pros</span>
               </div>
             </Link>
           ))}

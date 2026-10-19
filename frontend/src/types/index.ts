@@ -63,6 +63,7 @@ export interface ProProfile {
   bank_name?: string;
   bank_code?: string;
   account_number?: string;
+  account_name?: string;
   masked_account_number?: string;
   avg_rating?: number;
   rating_avg?: number;
@@ -71,7 +72,16 @@ export interface ProProfile {
   total_jobs_completed?: number;
   is_available?: boolean;
   distance_km?: number;
+  portfolio_photos?: PortfolioPhoto[];
   created_at?: string;
+}
+
+export interface PortfolioPhoto {
+  id: number;
+  pro_profile_id: number;
+  image_url: string;
+  caption?: string;
+  uploaded_at: string;
 }
 
 export interface JobPhoto {

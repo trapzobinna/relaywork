@@ -85,6 +85,7 @@ class ProProfile(Base):
     account_number = Column(String(50), nullable=True)
     account_name = Column(String(100), nullable=True)
     paystack_subaccount_code = Column(String(100), index=True, nullable=True)
+    is_available = Column(Boolean, default=True, nullable=False, index=True)
     avg_rating = Column(Float, default=0.0, nullable=False)
     total_reviews = Column(Integer, default=0, nullable=False)
     total_jobs_completed = Column(Integer, default=0, nullable=False)
@@ -92,6 +93,7 @@ class ProProfile(Base):
 
     user = relationship('User', back_populates='pro_profile')
     skill_category = relationship('SkillCategory', back_populates='pros')
+    portfolio_photos = relationship('PortfolioPhoto', back_populates='pro_profile', cascade='all, delete-orphan', order_by='PortfolioPhoto.uploaded_at.desc()')
 
 class Job(Base):
     __tablename__ = 'jobs'
@@ -199,3 +201,14 @@ class AdminAction(Base):
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
     admin = relationship('User', back_populates='admin_actions', foreign_keys=[admin_id])
+
+class PortfolioPhoto(Base):
+    __tablename__ = 'portfolio_photos'
+
+    id = Column(Integer, primary_key=True, index=True)
+    pro_profile_id = Column(Integer, ForeignKey('pro_profiles.id', ondelete='CASCADE'), index=True, nullable=False)
+    file_path = Column(String(255), nullable=False)
+    caption = Column(String(300), nullable=True)
+    uploaded_at = Column(DateTime, default=utcnow, nullable=False)
+
+    pro_profile = relationship('ProProfile', back_populates='portfolio_photos')
