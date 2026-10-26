@@ -5,14 +5,28 @@ export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 export type JobStatus =
   | 'requested'
   | 'pending'
+  | 'matched'
   | 'accepted'
   | 'declined'
   | 'rejected'
+  | 'en_route'
+  | 'on_site'
+  | 'quick_fix_done'
+  | 'quote_sent'
+  | 'quote_funded'
   | 'in_progress'
+  | 'delivered'
   | 'completed'
+  | 'released'
   | 'paid'
   | 'cancelled'
   | 'disputed';
+
+export type MaterialsMode = 'mode_a_client' | 'mode_b_wallet';
+
+export type MilestoneStatus = 'pending' | 'funded' | 'in_progress' | 'completed' | 'released';
+
+export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'declined' | 'expired' | 'voided';
 
 export type PaymentStatus = 'pending' | 'successful' | 'failed' | 'refunded';
 
@@ -34,6 +48,14 @@ export interface SkillCategory {
   slug: string;
   description?: string;
   icon?: string;
+}
+
+export interface PortfolioPhoto {
+  id: number;
+  pro_profile_id: number;
+  image_url: string;
+  caption?: string;
+  uploaded_at: string;
 }
 
 export interface ProProfile {
@@ -76,12 +98,78 @@ export interface ProProfile {
   created_at?: string;
 }
 
-export interface PortfolioPhoto {
+export interface PricingEstimate {
+  min_kobo: number;
+  max_kobo: number;
+  min_naira: number;
+  max_naira: number;
+  display_range: string;
+  exact_call_out_kobo?: number;
+  exact_call_out_naira?: number;
+  straight_distance_km?: number;
+  estimated_road_km?: number;
+  estimated_minutes?: number;
+  surge_multiplier: number;
+  surge_reason?: string;
+  diagnostic_credit_percent: number;
+  pricing_version: string;
+}
+
+export interface CatalogItem {
   id: number;
-  pro_profile_id: number;
-  image_url: string;
-  caption?: string;
-  uploaded_at: string;
+  skill_category_id: number;
+  trade: string;
+  name: string;
+  labor_kobo: number;
+  labor_naira: number;
+  parts_allowance_kobo: number;
+  parts_allowance_naira: number;
+  included_parts?: string;
+  is_active: boolean;
+}
+
+export interface MaterialLine {
+  id: number;
+  name: string;
+  spec?: string;
+  qty: number;
+  unit_estimate_kobo: number;
+  unit_estimate_naira: number;
+  total_kobo: number;
+  total_naira: number;
+}
+
+export interface Milestone {
+  id: number;
+  seq: number;
+  name: string;
+  amount_kobo: number;
+  amount_naira: number;
+  checklist?: string;
+  status: MilestoneStatus;
+  funded_at?: string;
+  completed_at?: string;
+}
+
+export interface Quote {
+  id: number;
+  job_id: number;
+  version: number;
+  status: QuoteStatus;
+  labor_total_kobo: number;
+  labor_total_naira: number;
+  materials_mode: MaterialsMode;
+  materials_estimate_kobo: number;
+  materials_estimate_naira: number;
+  diagnostic_credit_kobo: number;
+  diagnostic_credit_naira: number;
+  net_payable_labor_kobo: number;
+  net_payable_labor_naira: number;
+  warranty_days: number;
+  expires_at?: string;
+  created_at: string;
+  milestones: Milestone[];
+  material_lines: MaterialLine[];
 }
 
 export interface JobPhoto {
@@ -106,6 +194,13 @@ export interface Job {
   category?: SkillCategory;
   budget_amount?: number;
   status: JobStatus;
+  job_type?: 'quoted' | 'quick_fix';
+  call_out_kobo?: number;
+  call_out_naira?: number;
+  surge_multiplier?: number;
+  surge_reason?: string;
+  diagnosis_notes?: string;
+  has_quote?: boolean;
   is_en_route?: boolean;
   has_arrived?: boolean;
   pro_current_lat?: number;
@@ -133,7 +228,6 @@ export interface JobLocationPing {
   longitude: number;
   recorded_at: string;
 }
-
 
 export interface Message {
   id: number;
@@ -175,3 +269,60 @@ export interface Payment {
 }
 
 
+export interface ActiveSessionUser {
+  session_key: string;
+  user_id: number | null;
+  user_name: string;
+  user_email: string;
+  role: string;
+  ip_address: string;
+  city: string;
+  region: string;
+  country: string;
+  device: string;
+  browser: string;
+  os: string;
+  current_path: string;
+  method: string;
+  status_code: number;
+  response_time_ms: number;
+  last_seen_at: string;
+  last_seen_formatted: string;
+  seconds_ago: number;
+  hit_count: number;
+}
+
+export interface LiveTelemetryData {
+  live_user_count: number;
+  live_users: ActiveSessionUser[];
+  all_time_visits: number;
+  today_visits: number;
+  unique_visitors: number;
+  website_speed: {
+    avg_response_time_ms: number;
+    min_response_time_ms: number;
+    max_response_time_ms: number;
+    p95_response_time_ms: number;
+    requests_per_minute: number;
+    status: string;
+  };
+  database_speed: {
+    db_latency_ms: number;
+    status: string;
+    engine: string;
+    database_size_mb: number;
+    is_healthy: boolean;
+  };
+  region_breakdown: Array<{ region: string; visits: number }>;
+  user_type_breakdown: {
+    pros: number;
+    clients: number;
+    admins: number;
+    guests: number;
+  };
+  system_health: {
+    uptime: string;
+    server_status: string;
+    active_threads: number;
+  };
+}

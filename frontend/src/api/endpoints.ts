@@ -1,5 +1,8 @@
 import api from './client';
-import type { User, SkillCategory, ProProfile, Job, Message, Review, Payment } from '../types';
+import type {
+  User, SkillCategory, ProProfile, Job, Message, Review,
+  Payment, PricingEstimate, CatalogItem, Quote
+} from '../types';
 
 export const authApi = {
   login: async (credentials: any) => {
@@ -56,9 +59,13 @@ export const prosApi = {
     const res = await api.post('/pros/profile', data);
     return res.data;
   },
-  uploadDocument: async (file: File) => {
+  uploadDocument: async (file: File, type: 'id' | 'cert' = 'id') => {
     const formData = new FormData();
-    formData.append('id_document', file);
+    if (type === 'id') {
+      formData.append('id_document', file);
+    } else {
+      formData.append('cert_document', file);
+    }
     const res = await api.post('/pros/documents', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
@@ -66,6 +73,57 @@ export const prosApi = {
   },
   updateAvailability: async (is_available: boolean): Promise<ProProfile> => {
     const res = await api.patch('/pros/me/availability', { is_available });
+    return res.data;
+  },
+};
+
+export const pricingApi = {
+  getEstimate: async (params: {
+    client_lat?: number;
+    client_lng?: number;
+    pro_id?: number;
+    skill_category_id?: number;
+    is_emergency?: boolean;
+    tolls_kobo?: number;
+  }): Promise<PricingEstimate> => {
+    const res = await api.post('/pricing/estimate', params);
+    return res.data;
+  },
+  getCatalogItems: async (categoryId?: number, trade?: string): Promise<CatalogItem[]> => {
+    const res = await api.get('/pricing/catalog-items', {
+      params: { category_id: categoryId, trade }
+    });
+    return res.data;
+  },
+};
+
+export const quotesApi = {
+  submitDiagnosis: async (jobId: number, notes: string) => {
+    const res = await api.post(`/jobs/${jobId}/diagnosis`, { notes });
+    return res.data;
+  },
+  create: async (jobId: number, data: any): Promise<Quote> => {
+    const res = await api.post(`/jobs/${jobId}/quotes`, data);
+    return res.data;
+  },
+  getByJob: async (jobId: number): Promise<Quote[]> => {
+    const res = await api.get(`/jobs/${jobId}/quotes`);
+    return res.data;
+  },
+  accept: async (quoteId: number): Promise<Quote> => {
+    const res = await api.post(`/quotes/${quoteId}/accept`);
+    return res.data;
+  },
+  decline: async (quoteId: number): Promise<Quote> => {
+    const res = await api.post(`/quotes/${quoteId}/decline`);
+    return res.data;
+  },
+  completeMilestone: async (milestoneId: number) => {
+    const res = await api.post(`/milestones/${milestoneId}/complete`);
+    return res.data;
+  },
+  approveMilestone: async (milestoneId: number) => {
+    const res = await api.post(`/milestones/${milestoneId}/approve`);
     return res.data;
   },
 };
@@ -116,7 +174,6 @@ export const jobsApi = {
     return res.data;
   },
   sendMessage: async (jobId: number, content: string): Promise<Message> => {
-
     const res = await api.post(`/chat/${jobId}/messages`, { content });
     return res.data;
   },
@@ -185,6 +242,14 @@ export const adminApi = {
     const res = await api.get('/admin/audit-logs');
     return res.data;
   },
+  getLiveTelemetry: async () => {
+    const res = await api.get('/admin/telemetry/live');
+    return res.data;
+  },
+  getTelemetryLogs: async (limit: number = 50) => {
+    const res = await api.get('/admin/telemetry/logs', { params: { limit } });
+    return res.data;
+  },
 };
 
 export const portfolioApi = {
@@ -205,4 +270,3 @@ export const portfolioApi = {
     await api.delete(`/pros/${proId}/portfolio/${photoId}`);
   },
 };
-

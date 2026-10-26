@@ -4,7 +4,10 @@ import { prosApi, categoriesApi, portfolioApi } from '../api/endpoints';
 import type { SkillCategory, ProProfile } from '../types';
 import { useToast } from '../context/ToastContext';
 import { MapPicker } from '../components/MapPicker';
-import { Upload, CheckCircle, AlertCircle, Clock, ShieldCheck, MapPin, Trash2, Camera, ArrowRight, LayoutDashboard } from 'lucide-react';
+import {
+  Upload, CheckCircle, AlertCircle, Clock, ShieldCheck,
+  MapPin, Trash2, Camera, ArrowRight, LayoutDashboard, FileText
+} from 'lucide-react';
 
 const DEFAULT_CATEGORIES: SkillCategory[] = [
   { id: 1, name: 'Electrician', slug: 'electrician', icon: 'Zap' },
@@ -24,7 +27,8 @@ export const ProOnboarding: React.FC = () => {
   const [portfolioPhotos, setPortfolioPhotos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploadingId, setUploadingId] = useState(false);
+  const [uploadingCert, setUploadingCert] = useState(false);
   const [uploadingPortfolio, setUploadingPortfolio] = useState(false);
   const [portfolioCaption, setPortfolioCaption] = useState('');
   const { showToast } = useToast();
@@ -68,7 +72,7 @@ export const ProOnboarding: React.FC = () => {
           setAccountName(myProf.account_name || '');
           
           portfolioApi.getByPro(myProf.id)
-            .then(photos => setPortfolioPhotos(photos))
+            .then(photos => setPortfolioPhotos(photos || []))
             .catch(err => console.error('Failed to load portfolio:', err));
         }
       })
@@ -78,38 +82,44 @@ export const ProOnboarding: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     try {
       setSaving(true);
       const updated = await prosApi.createProfile({
         skill_category_id: Number(categoryId),
-        bio,
-        service_radius_km: Number(serviceRadius),
-        latitude: Number(lat),
-        longitude: Number(lng),
-        address_text: addressText,
-        bank_name: bankName,
-        bank_code: bankCode,
+        bio: bio || 'Professional verified artisan providing skilled trade services.',
+        service_radius_km: Number(serviceRadius) || 25,
+        latitude: Number(lat) || 6.5244,
+        longitude: Number(lng) || 3.3792,
+        address_text: addressText || 'Lagos, Nigeria',
+        bank_name: bankName || 'Access Bank',
+        bank_code: bankCode || '044',
         account_number: accountNumber || undefined,
         account_name: accountName || undefined,
       });
       setProfile(updated);
-      showToast('Pro profile updated successfully! Submitted for verification.', 'success');
+      showToast('Profile information saved successfully!', 'success');
+      return updated;
     } catch (err: any) {
       const msg = err.response?.data?.detail || 'Failed to update profile';
       showToast(msg, 'error');
+      return null;
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleIdUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       try {
-        setUploading(true);
-        const res = await prosApi.uploadDocument(e.target.files[0]);
-        showToast('Document uploaded successfully!', 'success');
+        setUploadingId(true);
+        // Ensure profile exists first if user hasn't hit save
+        if (!profile) {
+          await handleSubmit();
+        }
+        const res = await prosApi.uploadDocument(e.target.files[0], 'id');
+        showToast('Identification document uploaded successfully!', 'success');
         if (res.profile) {
           setProfile(res.profile);
         } else {
@@ -117,21 +127,51 @@ export const ProOnboarding: React.FC = () => {
           setProfile(refreshed);
         }
       } catch (err: any) {
-        showToast(err.response?.data?.detail || 'Failed to upload document', 'error');
+        showToast(err.response?.data?.detail || 'Failed to upload ID document', 'error');
       } finally {
-        setUploading(false);
+        setUploadingId(false);
+      }
+    }
+  };
+
+  const handleCertUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      try {
+        setUploadingCert(true);
+        if (!profile) {
+          await handleSubmit();
+        }
+        const res = await prosApi.uploadDocument(e.target.files[0], 'cert');
+        showToast('Trade certificate uploaded successfully!', 'success');
+        if (res.profile) {
+          setProfile(res.profile);
+        } else {
+          const refreshed = await prosApi.getMyProfile();
+          setProfile(refreshed);
+        }
+      } catch (err: any) {
+        showToast(err.response?.data?.detail || 'Failed to upload certificate', 'error');
+      } finally {
+        setUploadingCert(false);
       }
     }
   };
 
   const handlePortfolioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0] && profile?.id) {
+    if (e.target.files && e.target.files[0]) {
       try {
         setUploadingPortfolio(true);
-        const newPhoto = await portfolioApi.upload(profile.id, e.target.files[0], portfolioCaption);
-        setPortfolioPhotos([newPhoto, ...portfolioPhotos]);
-        setPortfolioCaption('');
-        showToast('Portfolio photo added!', 'success');
+        let proId = profile?.id;
+        if (!proId) {
+          const prof = await handleSubmit();
+          proId = prof?.id;
+        }
+        if (proId) {
+          const newPhoto = await portfolioApi.upload(proId, e.target.files[0], portfolioCaption);
+          setPortfolioPhotos([newPhoto, ...portfolioPhotos]);
+          setPortfolioCaption('');
+          showToast('Portfolio photo added!', 'success');
+        }
       } catch (err: any) {
         showToast(err.response?.data?.detail || 'Failed to upload portfolio photo', 'error');
       } finally {
@@ -166,7 +206,7 @@ export const ProOnboarding: React.FC = () => {
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Pro Profile & Identity Verification</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Complete your trade information, base location pin, payout bank, and upload ID to receive your Vetted Badge.
+            Configure your trade category, base operating location, payout bank, and upload ID to unlock bookings.
           </p>
         </div>
         {profile && (
@@ -206,8 +246,8 @@ export const ProOnboarding: React.FC = () => {
               </span>
               <p className="text-xs opacity-90 mt-0.5">
                 {profile.verification_status === 'approved'
-                  ? 'Your pro badge is active! You appear in top search results.'
-                  : 'Your profile and verification documents are under review by our governance team.'}
+                  ? 'Your pro badge is active! You appear at the top of client search and job dispatches.'
+                  : 'Your profile and verification documents are active and submitted to our verification team.'}
               </p>
             </div>
           </div>
@@ -231,7 +271,7 @@ export const ProOnboarding: React.FC = () => {
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(Number(e.target.value))}
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-300 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white cursor-pointer"
             >
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -283,12 +323,12 @@ export const ProOnboarding: React.FC = () => {
           <label className="block text-xs font-bold text-gray-700 uppercase">
             Service Location Pin ({lat.toFixed(4)}, {lng.toFixed(4)})
           </label>
-          <p className="text-xs text-gray-500">Click on the map below to set your exact base operating location.</p>
+          <p className="text-xs text-gray-500">Click on the map below to set your exact base operating location for accurate travel fee estimation.</p>
           <MapPicker initialLat={lat} initialLng={lng} onLocationSelect={(newLat, newLng) => { setLat(newLat); setLng(newLng); }} />
         </div>
 
         {/* Bank Subaccount Information */}
-        <h2 className="text-xl font-bold text-gray-900 border-b pb-3 pt-4">Payout Bank Information (Paystack Escrow)</h2>
+        <h2 className="text-xl font-bold text-gray-900 border-b pb-3 pt-4">Payout Bank Information (Escrow Transfers)</h2>
         <div className="grid md:grid-cols-2 gap-6">
           <div>
             <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Bank Name</label>
@@ -348,96 +388,142 @@ export const ProOnboarding: React.FC = () => {
       </form>
 
       {/* Proof of Identity Document Upload */}
-      <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm space-y-4">
-        <h2 className="text-xl font-bold text-gray-900 border-b pb-3">Proof of Identity & Trade Certificate</h2>
+      <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm space-y-6">
+        <h2 className="text-xl font-bold text-gray-900 border-b pb-3">Proof of Identity & Verification Documents</h2>
         <p className="text-xs text-gray-500">
-          Upload your NIN slip, Voter's Card, Driver's License, or Trade Certificate (PDF or Image under 5MB).
+          Upload your Government-issued ID (NIN Slip, Voter's Card, or Driver's License) and Trade Certificate to receive the Verified Artisan Trust Badge.
         </p>
 
-        {!profile ? (
-          <div className="border-2 border-dashed border-red-200 rounded-2xl p-8 text-center bg-red-50 text-red-600 font-medium">
-            Please click "Save Profile & Settings" above to create your profile before uploading documents.
-          </div>
-        ) : (
-          <div className="border-2 border-dashed border-gray-300 hover:border-blue-500 rounded-2xl p-8 text-center transition bg-gray-50/50">
-            <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-gray-700">
-              {uploading ? 'Uploading document...' : 'Click to select and upload document'}
-            </p>
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              onChange={handleDocUpload}
-              disabled={uploading}
-              className="mt-3 text-xs text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-            />
-          </div>
-        )}
-
-        {profile?.has_id_document && (
-          <p className="text-xs font-bold text-emerald-600 flex items-center">
-            <CheckCircle className="w-4 h-4 mr-1" /> Identification document is on file and pending verification.
-          </p>
-        )}
-      </div>
-
-      {/* Portfolio Photos Upload (Only enabled if profile exists) */}
-      {profile && (
-        <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm space-y-4">
-          <h2 className="text-xl font-bold text-gray-900 border-b pb-3">Past Work & Portfolio</h2>
-          <p className="text-xs text-gray-500">
-            Upload up to 10 photos of your best previous jobs to build trust with clients.
-          </p>
-          
-          <div className="flex gap-3 mt-4">
-            <input 
-              type="text" 
-              placeholder="Optional caption (e.g. Fixing AC in Lekki)" 
-              value={portfolioCaption}
-              onChange={(e) => setPortfolioCaption(e.target.value)}
-              className="flex-1 px-4 py-2 rounded-xl border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-            <div className="relative">
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Government ID Card */}
+          <div className="border-2 border-dashed border-gray-200 hover:border-blue-500 rounded-2xl p-6 text-center transition bg-gray-50/50 flex flex-col justify-between items-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900">National ID / Voter's Card / Driver's License</p>
+              <p className="text-xs text-gray-400 mt-1">JPEG, PNG, or PDF under 5MB</p>
+            </div>
+            {profile?.has_id_document ? (
+              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
+                <CheckCircle className="w-4 h-4" /> Document on File (Uploaded)
+              </div>
+            ) : null}
+            <label className="cursor-pointer">
+              <span className="inline-flex items-center gap-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2.5 rounded-xl shadow-sm transition">
+                <Upload className="w-3.5 h-3.5" />
+                {uploadingId ? 'Uploading...' : profile?.has_id_document ? 'Replace ID Document' : 'Upload ID Document'}
+              </span>
               <input
                 type="file"
-                accept="image/*"
-                onChange={handlePortfolioUpload}
-                disabled={uploadingPortfolio || portfolioPhotos.length >= 10}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                accept="image/*,.pdf"
+                onChange={handleIdUpload}
+                disabled={uploadingId}
+                className="hidden"
               />
-              <button disabled={uploadingPortfolio || portfolioPhotos.length >= 10} className="bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold px-4 py-2 rounded-xl border border-blue-200 flex items-center transition disabled:opacity-50">
-                <Camera className="w-4 h-4 mr-2" />
-                {uploadingPortfolio ? 'Uploading...' : 'Add Photo'}
-              </button>
-            </div>
+            </label>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
+          {/* Trade / Apprenticeship Certificate */}
+          <div className="border-2 border-dashed border-gray-200 hover:border-blue-500 rounded-2xl p-6 text-center transition bg-gray-50/50 flex flex-col justify-between items-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
+              <FileText className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900">Trade / Apprenticeship Certificate</p>
+              <p className="text-xs text-gray-400 mt-1">NABTEB, Trade Union, or Workshop Certificate</p>
+            </div>
+            {profile?.has_cert_document ? (
+              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
+                <CheckCircle className="w-4 h-4" /> Certificate on File (Uploaded)
+              </div>
+            ) : null}
+            <label className="cursor-pointer">
+              <span className="inline-flex items-center gap-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 px-4 py-2.5 rounded-xl shadow-sm transition">
+                <Upload className="w-3.5 h-3.5" />
+                {uploadingCert ? 'Uploading...' : profile?.has_cert_document ? 'Replace Certificate' : 'Upload Certificate'}
+              </span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={handleCertUpload}
+                disabled={uploadingCert}
+                className="hidden"
+              />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Portfolio / Past Work Photos */}
+      <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b pb-3">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Portfolio & Past Completed Jobs</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              High quality photos of your real previous jobs build client trust and boost booking rates.
+            </p>
+          </div>
+          <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+            {portfolioPhotos.length}/10 photos
+          </span>
+        </div>
+
+        {/* Upload New Photo */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            value={portfolioCaption}
+            onChange={(e) => setPortfolioCaption(e.target.value)}
+            placeholder="Add a caption (e.g. '3.5kVA Inverter Installation in Lekki Phase 1')"
+            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          />
+          <label className="cursor-pointer inline-flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white font-bold px-6 py-2.5 rounded-xl text-sm transition whitespace-nowrap shadow-sm">
+            <Camera className="w-4 h-4" />
+            <span>{uploadingPortfolio ? 'Uploading...' : 'Add Work Photo'}</span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handlePortfolioUpload}
+              disabled={uploadingPortfolio}
+              className="hidden"
+            />
+          </label>
+        </div>
+
+        {/* Photos Grid */}
+        {portfolioPhotos.length === 0 ? (
+          <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+            <Camera className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-xs font-semibold text-gray-500">No portfolio photos uploaded yet</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">Showcase your before & after installations to win more clients</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {portfolioPhotos.map((photo) => (
-              <div key={photo.id} className="relative group rounded-xl overflow-hidden bg-gray-100 border border-gray-200 aspect-square">
-                <img src={photo.image_url} alt={photo.caption || 'Portfolio'} className="w-full h-full object-cover" />
-                {photo.caption && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm p-1.5 text-white text-[10px] leading-tight">
-                    {photo.caption}
-                  </div>
-                )}
-                <button
-                  onClick={() => handleDeletePortfolio(photo.id)}
-                  className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition"
-                  title="Delete Photo"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+              <div key={photo.id} className="group relative rounded-2xl overflow-hidden border border-gray-200 bg-gray-100 aspect-square">
+                <img
+                  src={photo.image_url}
+                  alt={photo.caption || 'Past work'}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 text-white">
+                  <p className="text-[11px] font-medium line-clamp-3">
+                    {photo.caption || 'Portfolio photo'}
+                  </p>
+                  <button
+                    onClick={() => handleDeletePortfolio(photo.id)}
+                    className="self-end p-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-white transition"
+                    title="Delete photo"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
-          {portfolioPhotos.length === 0 && (
-             <div className="p-8 border-2 border-dashed border-gray-200 rounded-2xl text-center text-gray-400">
-               No photos yet. Add some to show off your skills!
-             </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

@@ -20,6 +20,7 @@ def override_get_db():
         db.close()
 
 app.dependency_overrides[get_db] = override_get_db
+app.state.limiter.enabled = False
 client = TestClient(app)
 
 @pytest.fixture(scope='module', autouse=True)

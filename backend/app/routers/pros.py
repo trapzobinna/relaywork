@@ -89,7 +89,6 @@ def search_pros(
         dist = None
         if lat is not None and lng is not None and p.latitude is not None and p.longitude is not None:
             dist = haversine_distance(lat, lng, p.latitude, p.longitude)
-            # Only filter by radius if client is not performing a direct name/text search
             if not (q and q.strip()) and radius_km is not None and dist > radius_km:
                 continue
         
@@ -131,18 +130,24 @@ def create_or_update_profile(
 ):
     cat = db.query(SkillCategory).filter(SkillCategory.id == data.skill_category_id).first()
     if not cat:
-        raise HTTPException(status_code=400, detail='Invalid skill category')
+        # Fallback to first category if invalid
+        cat = db.query(SkillCategory).first()
+        if not cat:
+            raise HTTPException(status_code=400, detail='No skill categories found')
+
+    lat = data.latitude if data.latitude is not None else 6.5244
+    lng = data.longitude if data.longitude is not None else 3.3792
 
     profile = db.query(ProProfile).filter(ProProfile.user_id == current_user.id).first()
     if not profile:
         profile = ProProfile(
             user_id=current_user.id,
-            skill_category_id=data.skill_category_id,
+            skill_category_id=cat.id,
             bio=data.bio,
-            service_radius_km=data.service_radius_km,
-            latitude=data.latitude,
-            longitude=data.longitude,
-            address_text=data.address_text,
+            service_radius_km=data.service_radius_km or 25.0,
+            latitude=lat,
+            longitude=lng,
+            address_text=data.address_text or 'Lagos, Nigeria',
             bank_name=data.bank_name,
             bank_code=data.bank_code,
             account_number=data.account_number,
@@ -151,12 +156,12 @@ def create_or_update_profile(
         )
         db.add(profile)
     else:
-        profile.skill_category_id = data.skill_category_id
+        profile.skill_category_id = cat.id
         profile.bio = data.bio
-        profile.service_radius_km = data.service_radius_km
-        profile.latitude = data.latitude
-        profile.longitude = data.longitude
-        profile.address_text = data.address_text
+        profile.service_radius_km = data.service_radius_km or profile.service_radius_km
+        profile.latitude = lat
+        profile.longitude = lng
+        profile.address_text = data.address_text or profile.address_text
         if data.bank_name: profile.bank_name = data.bank_name
         if data.bank_code: profile.bank_code = data.bank_code
         if data.account_number: profile.account_number = data.account_number
@@ -190,7 +195,18 @@ async def upload_documents(
 ):
     profile = db.query(ProProfile).filter(ProProfile.user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=400, detail='Please complete profile details first before uploading documents')
+        first_cat = db.query(SkillCategory).first()
+        cat_id = first_cat.id if first_cat else 1
+        profile = ProProfile(
+            user_id=current_user.id,
+            skill_category_id=cat_id,
+            latitude=6.5244,
+            longitude=3.3792,
+            address_text='Lagos, Nigeria',
+            verification_status=VerificationStatus.PENDING
+        )
+        db.add(profile)
+        db.flush()
 
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     allowed_types = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
@@ -234,7 +250,6 @@ def get_document_file(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Security: File serving is strictly authenticated and ownership-checked
     profile = db.query(ProProfile).filter(
         (ProProfile.id_document_path == filename) | (ProProfile.certification_document_path == filename)
     ).first()
@@ -242,7 +257,6 @@ def get_document_file(
     if not profile:
         raise HTTPException(status_code=404, detail='Document not found')
 
-    # Allow only document owner (Pro) or Admin
     if current_user.role != UserRole.ADMIN and profile.user_id != current_user.id:
         raise HTTPException(status_code=403, detail='You do not have permission to view this document')
 

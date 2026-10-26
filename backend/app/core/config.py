@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    PLATFORM_COMMISSION_PERCENT: float = 15.0
+    PLATFORM_COMMISSION_PERCENT: float = 7.5
 
     PAYSTACK_SECRET_KEY: str = ''
     PAYSTACK_PUBLIC_KEY: str = ''

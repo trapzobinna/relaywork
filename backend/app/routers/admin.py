@@ -5,10 +5,17 @@ from app.database import get_db
 from app.core.config import settings
 from app.core.security import get_password_hash
 from app.core.deps import require_admin, get_current_user
-from app.models import User, ProProfile, SkillCategory, Payment, AdminAction, UserRole, VerificationStatus, PaymentStatus
-from app.schemas import AdminBootstrapRequest, AdminProDecision, ProProfileOut, AdminActionOut, UserOut, PaymentOut
+from app.models import (
+    User, ProProfile, SkillCategory, Payment, AdminAction,
+    UserRole, VerificationStatus, PaymentStatus, Job, JobStatus, VisitorLog
+)
+from app.schemas import (
+    AdminBootstrapRequest, AdminProDecision, ProProfileOut,
+    AdminActionOut, UserOut, PaymentOut
+)
 from app.routers.pros import format_pro_out
 from app.services.paystack import PaystackService
+from app.services.telemetry import telemetry_service
 
 router = APIRouter(prefix='/api/admin', tags=['Admin'])
 
@@ -187,7 +194,6 @@ def revoke_admin(
     current_admin: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    # Only the bootstrap admin (who created themselves) may revoke admin rights
     bootstrap_log = db.query(AdminAction).filter(
         AdminAction.action_type == 'BOOTSTRAP_ADMIN_CREATED'
     ).first()
@@ -210,7 +216,7 @@ def revoke_admin(
         admin_id=current_admin.id,
         action_type='ADMIN_PRIVILEGES_REVOKED',
         target_user_id=user.id,
-        notes=f'Admin privileges revoked — role changed to CLIENT'
+        notes='Admin privileges revoked — role changed to CLIENT'
     )
     db.add(log)
     db.commit()
@@ -234,13 +240,17 @@ def get_admin_stats(
     pending_pros = db.query(ProProfile).filter(ProProfile.verification_status == VerificationStatus.PENDING).count()
     total_jobs = db.query(Job).count()
     completed_jobs = db.query(Job).filter(Job.status == JobStatus.COMPLETED).count()
-    total_payments = db.query(Payment).filter(Payment.status == PaymentStatus.SUCCESS).count()
+    total_payments = db.query(Payment).filter(Payment.status == PaymentStatus.PAID).count()
 
-    # Identify the bootstrap admin — the one who bootstrapped themselves
     bootstrap_log = db.query(AdminAction).filter(
         AdminAction.action_type == 'BOOTSTRAP_ADMIN_CREATED'
     ).first()
     bootstrap_admin_id = bootstrap_log.admin_id if bootstrap_log else None
+
+    # Telemetry snapshot for the stats bar
+    all_time_visits = db.query(VisitorLog).count()
+    db_speed = telemetry_service.test_database_speed(db)
+    live_users = telemetry_service.get_live_active_users()
 
     return {
         'total_users': total_users,
@@ -250,8 +260,56 @@ def get_admin_stats(
         'completed_jobs': completed_jobs,
         'total_payments': total_payments,
         'commission_percent': settings.PLATFORM_COMMISSION_PERCENT,
-        'bootstrap_admin_id': bootstrap_admin_id
+        'bootstrap_admin_id': bootstrap_admin_id,
+        'all_time_visits': max(all_time_visits, len(live_users)),
+        'live_user_count': max(1, len(live_users)),
+        'db_speed_ms': db_speed['db_latency_ms'],
+        'db_status': db_speed['status']
     }
+
+@router.get('/telemetry/live')
+def get_live_telemetry(
+    current_admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns real-time intelligence:
+    - Live user count and detailed active sessions with IPs and locations
+    - All-time website visits & today's visits
+    - Real-time database query latency & SQLite storage health
+    - Real-time website API response times & RPM
+    - Regional classification and user demographic breakdown
+    """
+    return telemetry_service.get_realtime_metrics(db)
+
+@router.get('/telemetry/logs')
+def get_telemetry_logs(
+    limit: int = 50,
+    current_admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    logs = db.query(VisitorLog).order_by(VisitorLog.created_at.desc()).limit(limit).all()
+    return [
+        {
+            'id': l.id,
+            'ip_address': l.ip_address,
+            'user_id': l.user_id,
+            'user_name': l.user.full_name if l.user else 'Guest Visitor',
+            'user_role': l.user.role.value if l.user else 'guest',
+            'path': l.path,
+            'method': l.method,
+            'status_code': l.status_code,
+            'response_time_ms': l.response_time_ms,
+            'device': l.device,
+            'browser': l.browser,
+            'os': l.os,
+            'city': l.city,
+            'region': l.region,
+            'country': l.country,
+            'created_at': l.created_at.isoformat()
+        }
+        for l in logs
+    ]
 
 @router.get('/jobs')
 def list_all_jobs(
@@ -280,4 +338,3 @@ def list_audit_logs(
             created_at=a.created_at
         ))
     return out
-

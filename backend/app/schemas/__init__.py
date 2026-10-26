@@ -1,7 +1,10 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
-from app.models import UserRole, VerificationStatus, JobStatus, PaymentStatus
+from app.models import (
+    UserRole, VerificationStatus, JobStatus, PaymentStatus,
+    QuoteStatus, MilestoneStatus, MaterialsMode, DisputeStatus
+)
 
 # Auth & User Schemas
 class UserRegister(BaseModel):
@@ -29,7 +32,6 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=6)
 
 class RefreshTokenRequest(BaseModel):
-
     refresh_token: str
 
 class UserOut(BaseModel):
@@ -61,13 +63,24 @@ class SkillCategoryOut(SkillCategoryBase):
     class Config:
         from_attributes = True
 
+# Portfolio Photo Schemas
+class PortfolioPhotoOut(BaseModel):
+    id: int
+    pro_profile_id: int
+    image_url: str
+    caption: Optional[str] = None
+    uploaded_at: datetime
+
+    class Config:
+        from_attributes = True
+
 # Pro Profile Schemas
 class ProProfileCreate(BaseModel):
     skill_category_id: int
     bio: Optional[str] = None
     service_radius_km: float = Field(25.0, ge=1.0, le=200.0)
-    latitude: float = Field(..., ge=-90.0, le=90.0)
-    longitude: float = Field(..., ge=-180.0, le=180.0)
+    latitude: Optional[float] = Field(6.5244, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(3.3792, ge=-180.0, le=180.0)
     address_text: Optional[str] = None
     bank_name: Optional[str] = None
     bank_code: Optional[str] = None
@@ -110,7 +123,47 @@ class ProProfileOut(BaseModel):
     total_jobs_completed: int
     distance_km: Optional[float] = None
     created_at: datetime
-    portfolio_photos: Optional[List['PortfolioPhotoOut']] = None
+    portfolio_photos: Optional[List[PortfolioPhotoOut]] = None
+
+    class Config:
+        from_attributes = True
+
+# Pricing & Catalog Schemas
+class PricingEstimateRequest(BaseModel):
+    client_lat: Optional[float] = None
+    client_lng: Optional[float] = None
+    pro_id: Optional[int] = None
+    skill_category_id: Optional[int] = None
+    is_emergency: bool = False
+    tolls_kobo: int = 0
+
+class PricingEstimateResponse(BaseModel):
+    min_kobo: int
+    max_kobo: int
+    min_naira: float
+    max_naira: float
+    display_range: str
+    exact_call_out_kobo: Optional[int] = None
+    exact_call_out_naira: Optional[float] = None
+    straight_distance_km: Optional[float] = None
+    estimated_road_km: Optional[float] = None
+    estimated_minutes: Optional[int] = None
+    surge_multiplier: float
+    surge_reason: Optional[str] = None
+    diagnostic_credit_percent: float = 50.0
+    pricing_version: str = 'v1.0'
+
+class CatalogItemOut(BaseModel):
+    id: int
+    skill_category_id: int
+    trade: str
+    name: str
+    labor_kobo: int
+    labor_naira: float
+    parts_allowance_kobo: int
+    parts_allowance_naira: float
+    included_parts: Optional[str] = None
+    is_active: bool
 
     class Config:
         from_attributes = True
@@ -125,6 +178,9 @@ class JobCreate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     location_address: Optional[str] = None
+    job_type: str = 'quoted'  # 'quoted' or 'quick_fix'
+    is_emergency: bool = False
+    catalog_item_id: Optional[int] = None
 
 class JobPhotoOut(BaseModel):
     id: int
@@ -149,6 +205,12 @@ class JobOut(BaseModel):
     longitude: Optional[float] = None
     location_address: Optional[str] = None
     status: JobStatus
+    job_type: str = 'quoted'
+    call_out_kobo: int = 600000
+    call_out_naira: float = 6000.0
+    surge_multiplier: float = 1.0
+    surge_reason: Optional[str] = None
+    diagnosis_notes: Optional[str] = None
     is_en_route: bool = False
     has_arrived: bool = False
     pro_current_lat: Optional[float] = None
@@ -159,6 +221,7 @@ class JobOut(BaseModel):
     completed_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
     photos: List[JobPhotoOut] = []
+    has_quote: bool = False
 
     class Config:
         from_attributes = True
@@ -177,6 +240,76 @@ class JobLocationPingOut(BaseModel):
     class Config:
         from_attributes = True
 
+# Structured Diagnosis & Quotes
+class DiagnosisSubmitRequest(BaseModel):
+    notes: str = Field(..., min_length=10, description="Detailed diagnostic findings from on-site inspection")
+
+class MaterialLineCreate(BaseModel):
+    name: str = Field(..., min_length=2)
+    spec: Optional[str] = None
+    qty: int = Field(1, ge=1)
+    unit_estimate_kobo: int = Field(0, ge=0)
+
+class MaterialLineOut(BaseModel):
+    id: int
+    name: str
+    spec: Optional[str] = None
+    qty: int
+    unit_estimate_kobo: int
+    unit_estimate_naira: float
+    total_kobo: int
+    total_naira: float
+
+class MilestoneCreate(BaseModel):
+    seq: int = Field(1, ge=1, le=6)
+    name: str = Field(..., min_length=3)
+    amount_kobo: int = Field(..., gt=0)
+    checklist: Optional[str] = None
+
+class MilestoneOut(BaseModel):
+    id: int
+    seq: int
+    name: str
+    amount_kobo: int
+    amount_naira: float
+    checklist: Optional[str] = None
+    status: MilestoneStatus
+    funded_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class QuoteCreate(BaseModel):
+    labor_total_kobo: int = Field(..., gt=0)
+    materials_mode: MaterialsMode = MaterialsMode.MODE_A_CLIENT
+    materials_estimate_kobo: int = Field(0, ge=0)
+    warranty_days: int = Field(7, ge=0, le=365)
+    milestones: List[MilestoneCreate]
+    material_lines: Optional[List[MaterialLineCreate]] = []
+
+class QuoteOut(BaseModel):
+    id: int
+    job_id: int
+    version: int
+    status: QuoteStatus
+    labor_total_kobo: int
+    labor_total_naira: float
+    materials_mode: MaterialsMode
+    materials_estimate_kobo: int
+    materials_estimate_naira: float
+    diagnostic_credit_kobo: int
+    diagnostic_credit_naira: float
+    net_payable_labor_kobo: int
+    net_payable_labor_naira: float
+    warranty_days: int
+    expires_at: Optional[datetime] = None
+    created_at: datetime
+    milestones: List[MilestoneOut] = []
+    material_lines: List[MaterialLineOut] = []
+
+    class Config:
+        from_attributes = True
 
 # Message Schemas
 class MessageCreate(BaseModel):
@@ -257,16 +390,6 @@ class AdminActionOut(BaseModel):
     target_user_id: Optional[int] = None
     notes: Optional[str] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-class PortfolioPhotoOut(BaseModel):
-    id: int
-    pro_profile_id: int
-    image_url: str
-    caption: Optional[str] = None
-    uploaded_at: datetime
 
     class Config:
         from_attributes = True

@@ -1,9 +1,15 @@
 import os
+import json
 from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine, Base
-from app.models import User, ProProfile, SkillCategory, Job, JobPhoto, Message, Payment, Review, AdminAction, UserRole, VerificationStatus, JobStatus, PaymentStatus
+from app.models import (
+    User, ProProfile, SkillCategory, Job, JobPhoto, Message, Payment, Review,
+    AdminAction, UserRole, VerificationStatus, JobStatus, PaymentStatus,
+    PricingConfig, CatalogItem, LedgerAccount, LedgerAccountKind
+)
 from app.core.security import get_password_hash
 from app.core.config import settings
+from app.services.pricing import DEFAULT_PRICING_CONFIG
 
 def seed():
     Base.metadata.create_all(bind=engine)
@@ -28,7 +34,86 @@ def seed():
     db.commit()
     print('Skill categories seeded.')
 
-    # 2. Seed Demo Client (No hardcoded admin!)
+    # 2. Seed PricingConfig v1.0 per PDF Specification
+    existing_config = db.query(PricingConfig).filter(PricingConfig.version == 'v1.0').first()
+    if not existing_config:
+        cfg = PricingConfig(
+            version='v1.0',
+            params=json.dumps(DEFAULT_PRICING_CONFIG)
+        )
+        db.add(cfg)
+        db.commit()
+        print('PricingConfig v1.0 seeded.')
+    else:
+        existing_config.params = json.dumps(DEFAULT_PRICING_CONFIG)
+        db.commit()
+        print('PricingConfig v1.0 updated with 7.5% platform commission.')
+
+    # 3. Seed Catalog Items (Quick-Fix Standard Rate Card)
+    cats = {c.slug: c for c in db.query(SkillCategory).all()}
+
+    catalog_data = [
+        # Electrician
+        {'slug': 'electrician', 'name': 'Socket / Switch Replacement', 'labor_kobo': 800000, 'parts_allowance_kobo': 250000, 'included_parts': '1x Standard 13A double socket'},
+        {'slug': 'electrician', 'name': 'Light Fixture / Chandelier Install', 'labor_kobo': 750000, 'parts_allowance_kobo': 0, 'included_parts': 'Mounting anchors & insulation tape'},
+        {'slug': 'electrician', 'name': 'Distribution Board Breaker Swap', 'labor_kobo': 1200000, 'parts_allowance_kobo': 500000, 'included_parts': 'Single pole 32A/63A miniature circuit breaker'},
+        {'slug': 'electrician', 'name': 'Generator Changeover Switch Installation', 'labor_kobo': 1500000, 'parts_allowance_kobo': 0, 'included_parts': 'Cabling clips and lugs'},
+        # Plumber
+        {'slug': 'plumber', 'name': 'Tap / Angle Valve Replacement', 'labor_kobo': 700000, 'parts_allowance_kobo': 350000, 'included_parts': '1x Heavy duty brass angle valve & thread seal tape'},
+        {'slug': 'plumber', 'name': 'Sink Drain Trap Unclog & Clean', 'labor_kobo': 900000, 'parts_allowance_kobo': 0, 'included_parts': 'Chemical drain cleaner & new rubber gasket'},
+        {'slug': 'plumber', 'name': 'Toilet Cistern Flush Valve Rebuild', 'labor_kobo': 1000000, 'parts_allowance_kobo': 600000, 'included_parts': 'Universal dual-flush cistern mechanism'},
+        {'slug': 'plumber', 'name': 'Surface Water Pump Pressure Connection', 'labor_kobo': 1400000, 'parts_allowance_kobo': 0, 'included_parts': 'PPR pipe couplings and union'},
+        # AC Repair
+        {'slug': 'ac-repair', 'name': 'Split AC Standard Servicing & Filter Wash', 'labor_kobo': 1000000, 'parts_allowance_kobo': 0, 'included_parts': 'Anti-bacterial coil wash & blower cleaning'},
+        {'slug': 'ac-repair', 'name': 'Refrigerant Gas Top-up (R22 / R410)', 'labor_kobo': 1800000, 'parts_allowance_kobo': 800000, 'included_parts': 'Up to 1.5kg approved refrigerant charge'},
+        {'slug': 'ac-repair', 'name': 'AC Compressor Capacitor Replacement', 'labor_kobo': 850000, 'parts_allowance_kobo': 450000, 'included_parts': 'Dual run capacitor (45+5 uF)'},
+        # Carpenter
+        {'slug': 'carpenter', 'name': 'Door Mortise Lock & Handle Replacement', 'labor_kobo': 800000, 'parts_allowance_kobo': 700000, 'included_parts': 'Standard 3-lever mortise lockset with keys'},
+        {'slug': 'carpenter', 'name': 'Kitchen Cabinet Hinges Re-alignment (up to 4)', 'labor_kobo': 700000, 'parts_allowance_kobo': 300000, 'included_parts': 'Hydraulic soft-close hinges'},
+        {'slug': 'carpenter', 'name': 'Wooden Bed Frame Reinforcement', 'labor_kobo': 1200000, 'parts_allowance_kobo': 400000, 'included_parts': 'Hardwood support beams and brackets'},
+        # Painter
+        {'slug': 'painter', 'name': 'Single Room Refresh Coat (Labor)', 'labor_kobo': 2000000, 'parts_allowance_kobo': 0, 'included_parts': 'Masking tape and drop sheet protection'},
+        # Mason
+        {'slug': 'mason', 'name': 'Floor Tile Patch & Re-grouting (up to 5 tiles)', 'labor_kobo': 1200000, 'parts_allowance_kobo': 400000, 'included_parts': 'Tile adhesive & white cement grout'},
+    ]
+
+    for item in catalog_data:
+        cat = cats.get(item['slug'])
+        if cat:
+            existing_item = db.query(CatalogItem).filter(
+                CatalogItem.skill_category_id == cat.id,
+                CatalogItem.name == item['name']
+            ).first()
+            if not existing_item:
+                c = CatalogItem(
+                    skill_category_id=cat.id,
+                    trade=cat.slug,
+                    name=item['name'],
+                    labor_kobo=item['labor_kobo'],
+                    parts_allowance_kobo=item['parts_allowance_kobo'],
+                    included_parts=item['included_parts']
+                )
+                db.add(c)
+    db.commit()
+    print('Catalog rate card items seeded.')
+
+    # 4. Seed System Ledger Accounts
+    system_accounts = [
+        (LedgerAccountKind.GATEWAY_CLEARING, 'system', None),
+        (LedgerAccountKind.PLATFORM_REVENUE, 'system', None),
+        (LedgerAccountKind.GATEWAY_FEE_EXPENSE, 'system', None),
+    ]
+    for kind, owner_type, owner_id in system_accounts:
+        acc = db.query(LedgerAccount).filter(
+            LedgerAccount.kind == kind,
+            LedgerAccount.owner_type == owner_type
+        ).first()
+        if not acc:
+            db.add(LedgerAccount(kind=kind, owner_type=owner_type, owner_id=owner_id))
+    db.commit()
+    print('System ledger accounts seeded.')
+
+    # 5. Seed Demo Client
     demo_client = db.query(User).filter(User.email == 'client@relaywork.local').first()
     if not demo_client:
         demo_client = User(
@@ -45,7 +130,7 @@ def seed():
         db.refresh(demo_client)
         print('Demo client created: client@relaywork.local / ClientPass123!')
 
-    # 3. Seed Demo Verified Pro 1 (Electrician in Lagos, Victoria Island / Lekki coordinates: 6.4281, 3.4219)
+    # 6. Seed Demo Verified Pro 1 (Electrician in Lagos, Victoria Island / Lekki coordinates: 6.4281, 3.4219)
     elec_cat = db.query(SkillCategory).filter(SkillCategory.slug == 'electrician').first()
     demo_pro = db.query(User).filter(User.email == 'pro.tunde@relaywork.local').first()
     if not demo_pro and elec_cat:
@@ -84,7 +169,7 @@ def seed():
         db.commit()
         print('Demo pro created: pro.tunde@relaywork.local / ProPass123!')
 
-    # 4. Seed Demo Verified Pro 2 (Plumber in Ikeja coordinates: 6.5957, 3.3421)
+    # 7. Seed Demo Verified Pro 2 (Plumber in Ikeja coordinates: 6.5957, 3.3421)
     plumb_cat = db.query(SkillCategory).filter(SkillCategory.slug == 'plumber').first()
     demo_pro2 = db.query(User).filter(User.email == 'pro.emeka@relaywork.local').first()
     if not demo_pro2 and plumb_cat:
@@ -123,7 +208,7 @@ def seed():
         db.commit()
         print('Demo pro 2 created: pro.emeka@relaywork.local / ProPass123!')
 
-    # 5. Seed Pending Pro 3 (For Admin verification demo)
+    # 8. Seed Pending Pro 3 (For Admin verification demo)
     ac_cat = db.query(SkillCategory).filter(SkillCategory.slug == 'ac-repair').first()
     pending_pro = db.query(User).filter(User.email == 'pro.musa@relaywork.local').first()
     if not pending_pro and ac_cat:
